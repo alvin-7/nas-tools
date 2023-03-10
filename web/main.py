@@ -812,15 +812,19 @@ def unidentification():
 @App.route('/mediafile', methods=['POST', 'GET'])
 @login_required
 def mediafile():
-    download_dirs = Downloader().get_download_visit_dirs()
-    if download_dirs:
-        try:
-            DirD = os.path.commonpath(download_dirs).replace("\\", "/")
-        except Exception as err:
-            print(str(err))
-            DirD = "/"
+    media_default_path = Config().get_config('media').get('media_default_path')
+    if media_default_path:
+        DirD = media_default_path
     else:
-        DirD = "/"
+        download_dirs = Downloader().get_download_visit_dirs()
+        if download_dirs:
+            try:
+                DirD = os.path.commonpath(download_dirs).replace("\\", "/")
+            except Exception as err:
+                print(str(err))
+                DirD = "/"
+        else:
+            DirD = "/"
     DirR = request.args.get("dir")
     return render_template("rename/mediafile.html",
                            Dir=DirR or DirD)
@@ -1043,7 +1047,10 @@ def dirlist():
         r = ['<ul class="jqueryFileTree" style="display: none;">']
         in_dir = request.form.get('dir')
         ft = request.form.get("filter")
-        if not in_dir or in_dir == "/":
+        if not in_dir:
+            media_default_path = Config().get_config('media').get('media_default_path')
+            in_dir = media_default_path if media_default_path else "/"
+        if in_dir == "/":
             if SystemUtils.get_system() == OsType.WINDOWS:
                 partitions = SystemUtils.get_windows_drives()
                 if partitions:
@@ -1283,9 +1290,9 @@ def telegram():
                     return '只有管理员才有权限执行此命令'
             else:
                 if not str(user_id) in interactive_client.get("client").get_users():
-                    message.send_channel_msg(channel=SearchType.TG,
-                                             title="你不在用户白名单中，无法使用此机器人",
-                                             user_id=user_id)
+                    Message().send_channel_msg(channel=SearchType.TG,
+                                               title="你不在用户白名单中，无法使用此机器人",
+                                               user_id=user_id)
                     return '你不在用户白名单中，无法使用此机器人'
             WebAction().handle_message_job(msg=text,
                                            in_from=SearchType.TG,

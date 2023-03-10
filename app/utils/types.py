@@ -126,6 +126,8 @@ class EventType(Enum):
     SourceFileDeleted = "sourcefile.deleted"
     # 媒件库文件被删除
     LibraryFileDeleted = "libraryfile.deleted"
+    # 刮削媒体信息
+    MediaScrapStart = "media.scrap.start"
 
 
 # 系统配置Key字典
@@ -144,6 +146,18 @@ class SystemConfigKey(Enum):
     DefaultDownloader = "DefaultDownloader"
     # 默认下载设置
     DefaultDownloadSetting = "DefaultDownloadSetting"
+
+
+# 处理进度Key字典
+class ProgressKey(Enum):
+    # 搜索
+    Search = "search"
+    # 转移
+    FileTransfer = "filetransfer"
+    # 媒体库同步
+    MediaSync = "mediasync"
+    # 站点Cookie获取
+    SiteCookie = "sitecookie"
 
 
 # 电影类型关键字
