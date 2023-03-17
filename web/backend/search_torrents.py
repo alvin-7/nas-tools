@@ -4,6 +4,7 @@ import re
 import log
 from app.downloader import Downloader
 from app.helper import DbHelper, ProgressHelper
+from app.helper.openai_helper import OpenAiHelper
 from app.indexer import Indexer
 from app.media import Media, DouBan
 from app.message import Message
@@ -11,7 +12,7 @@ from app.searcher import Searcher
 from app.sites import Sites
 from app.subscribe import Subscribe
 from app.utils import StringUtils, Torrent
-from app.utils.types import SearchType, IndexerType, ProgressKey
+from app.utils.types import SearchType, IndexerType, ProgressKey, RssType
 from config import Config
 from web.backend.web_utils import WebUtils
 
@@ -181,6 +182,8 @@ def search_media_by_message(input_str, in_from: SearchType, user_id, user_name=N
     if not input_str:
         log.info("【Searcher】检索关键字有误！")
         return
+    else:
+        input_str = str(input_str).strip()
     # 如果是数字，表示选择项
     if input_str.isdigit() and int(input_str) < 10:
         # 获取之前保存的可选项
@@ -228,14 +231,21 @@ def search_media_by_message(input_str, in_from: SearchType, user_id, user_name=N
                         media_info=media_info,
                         user_id=user_id,
                         user_name=user_name)
-    # 接收到文本，开始查询可能的媒体信息供选择
+    # 接收到文本
     else:
         if input_str.startswith("订阅"):
+            # 订阅
             SEARCH_MEDIA_TYPE[user_id] = "SUBSCRIBE"
             input_str = re.sub(r"订阅[:：\s]*", "", input_str)
         elif input_str.startswith("http"):
+            # 下载链接
             SEARCH_MEDIA_TYPE[user_id] = "DOWNLOAD"
+        elif re.search(r"^请[问帮你]|[?？]$", input_str, re.IGNORECASE) \
+                or StringUtils.count_words(input_str) > 15:
+            # 问答
+            SEARCH_MEDIA_TYPE[user_id] = "ASK"
         else:
+            # 搜索
             input_str = re.sub(r"(搜索|下载)[:：\s]*", "", input_str)
             SEARCH_MEDIA_TYPE[user_id] = "SEARCH"
 
@@ -271,7 +281,18 @@ def search_media_by_message(input_str, in_from: SearchType, user_id, user_name=N
                                   torrent_file=filepath,
                                   in_from=in_from,
                                   user_name=user_name)
-
+        # 聊天
+        elif SEARCH_MEDIA_TYPE[user_id] == "ASK":
+            # 调用ChatGPT Api
+            if not OpenAiHelper().get_state():
+                answer = "OpenAI功能未启用！"
+            else:
+                answer = OpenAiHelper().get_answer(input_str)
+            # 发送消息
+            Message().send_channel_msg(channel=in_from,
+                                       title="",
+                                       text=str(answer).strip(),
+                                       user_id=user_id)
         # 搜索或订阅
         else:
             # 获取字符串中可能的RSS站点列表
@@ -441,9 +462,13 @@ def __rss_media(in_from, media_info, user_id=None, state='D', user_name=None):
     code, msg, media_info = Subscribe().add_rss_subscribe(mtype=media_info.type,
                                                           name=media_info.title,
                                                           year=media_info.year,
+                                                          in_form=RssType.Auto,
                                                           season=media_info.begin_season,
                                                           mediaid=mediaid,
                                                           state=state,
+                                                          filter_pix=media_info.filter_pix,
+                                                          filter_restype=media_info.filter_restype,
+                                                          filter_rule=media_info.filter_rule,
                                                           rss_sites=media_info.rss_sites,
                                                           search_sites=media_info.search_sites,
                                                           in_from=in_from)

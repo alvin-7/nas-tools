@@ -38,7 +38,7 @@ from app.torrentremover import TorrentRemover
 from app.utils import StringUtils, EpisodeFormat, RequestUtils, PathUtils, \
     SystemUtils, ExceptionUtils
 from app.utils.types import RmtMode, OsType, SearchType, SyncType, MediaType, MovieTypes, TvTypes, \
-    EventType, SystemConfigKey
+    EventType, SystemConfigKey, RssType
 from config import RMT_MEDIAEXT, TMDB_IMAGE_W500_URL, RMT_SUBEXT, Config
 from web.backend.search_torrents import search_medias_for_web, search_media_by_message
 from web.backend.user import User
@@ -216,7 +216,8 @@ class WebAction:
             "get_downloaders": self.__get_downloaders,
             "test_downloader": self.__test_downloader,
             "get_indexer_statistics": self.__get_indexer_statistics,
-            "media_path_scrap": self.__media_path_scrap
+            "media_path_scrap": self.__media_path_scrap,
+            "get_default_rss_setting": self.get_default_rss_setting
         }
 
     def action(self, cmd, data=None):
@@ -329,7 +330,8 @@ class WebAction:
             "/tbl": {"func": WebAction().truncate_blacklist, "desp": "清理转移缓存"},
             "/trh": {"func": WebAction().truncate_rsshistory, "desp": "清理RSS缓存"},
             "/utf": {"func": WebAction().unidentification, "desp": "重新识别"},
-            "/udt": {"func": WebAction().update_system, "desp": "系统更新"}
+            "/udt": {"func": WebAction().update_system, "desp": "系统更新"},
+            "/sta": {"func": WebAction().user_statistics, "desp": "数据统计"}
         }
 
         # 触发事件
@@ -687,6 +689,7 @@ class WebAction:
         season = data.get("season")
         episode_format = data.get("episode_format")
         episode_details = data.get("episode_details")
+        episode_part = data.get("episode_part")
         episode_offset = data.get("episode_offset")
         min_filesize = data.get("min_filesize")
         if mtype in MovieTypes:
@@ -707,6 +710,7 @@ class WebAction:
                                                     media_type=media_type,
                                                     episode_format=episode_format,
                                                     episode_details=episode_details,
+                                                    episode_part=episode_part,
                                                     episode_offset=episode_offset,
                                                     need_fix_all=need_fix_all,
                                                     min_filesize=min_filesize,
@@ -734,6 +738,7 @@ class WebAction:
         season = data.get("season")
         episode_format = data.get("episode_format")
         episode_details = data.get("episode_details")
+        episode_part = data.get("episode_part")
         episode_offset = data.get("episode_offset")
         min_filesize = data.get("min_filesize")
         if mtype in MovieTypes:
@@ -749,6 +754,7 @@ class WebAction:
                                                     media_type=media_type,
                                                     episode_format=episode_format,
                                                     episode_details=episode_details,
+                                                    episode_part=episode_part,
                                                     episode_offset=episode_offset,
                                                     min_filesize=min_filesize,
                                                     tmdbid=tmdbid,
@@ -765,6 +771,7 @@ class WebAction:
                           media_type=None,
                           episode_format=None,
                           episode_details=None,
+                          episode_part=None,
                           episode_offset=None,
                           min_filesize=None,
                           tmdbid=None,
@@ -795,6 +802,7 @@ class WebAction:
                                                                episode=(
                                                                    EpisodeFormat(episode_format,
                                                                                  episode_details,
+                                                                                 episode_part,
                                                                                  episode_offset),
                                                                    need_fix_all),
                                                                min_filesize=min_filesize,
@@ -809,6 +817,7 @@ class WebAction:
                                                                episode=(
                                                                    EpisodeFormat(episode_format,
                                                                                  episode_details,
+                                                                                 episode_part,
                                                                                  episode_offset),
                                                                    need_fix_all),
                                                                min_filesize=min_filesize,
@@ -1357,8 +1366,9 @@ class WebAction:
         """
         添加RSS订阅
         """
-        name = data.get("name")
         _subscribe = Subscribe()
+        in_form = RssType.Manual if data.get("in_form") == "manual" else RssType.Auto
+        name = data.get("name")
         year = data.get("year")
         keyword = data.get("keyword")
         season = data.get("season")
@@ -1379,6 +1389,7 @@ class WebAction:
         page = data.get("page")
         mtype = MediaType.MOVIE if data.get(
             "type") in MovieTypes else MediaType.TV
+
         media_info = None
         if isinstance(season, list):
             code = 0
@@ -1387,6 +1398,7 @@ class WebAction:
                 code, msg, media_info = _subscribe.add_rss_subscribe(mtype=mtype,
                                                                      name=name,
                                                                      year=year,
+                                                                     in_form=in_form,
                                                                      keyword=keyword,
                                                                      season=sea,
                                                                      fuzzy_match=fuzzy_match,
@@ -1407,6 +1419,7 @@ class WebAction:
             code, msg, media_info = _subscribe.add_rss_subscribe(mtype=mtype,
                                                                  name=name,
                                                                  year=year,
+                                                                 in_form=in_form,
                                                                  keyword=keyword,
                                                                  season=season,
                                                                  fuzzy_match=fuzzy_match,
@@ -1997,9 +2010,10 @@ class WebAction:
         名称识别测试
         """
         name = data.get("name")
+        subtitle = data.get("subtitle")
         if not name:
             return {"code": -1}
-        media_info = Media().get_media_info(title=name)
+        media_info = Media().get_media_info(title=name, subtitle=subtitle)
         if not media_info:
             return {"code": 0, "data": {"name": "无法识别"}}
         return {"code": 0, "data": self.mediainfo_dict(media_info)}
@@ -3148,6 +3162,7 @@ class WebAction:
             code, msg, _ = Subscribe().add_rss_subscribe(mtype=mtype,
                                                          name=rssinfo[0].NAME,
                                                          year=rssinfo[0].YEAR,
+                                                         in_form=RssType.Auto,
                                                          season=season,
                                                          mediaid=rssinfo[0].TMDBID,
                                                          total_ep=rssinfo[0].TOTAL,
@@ -3410,6 +3425,8 @@ class WebAction:
             mtype = item.TYPE or ""
             SE_key = item.ES_STRING if item.ES_STRING and mtype != "MOV" else "MOV"
             media_type = {"MOV": "电影", "TV": "电视剧", "ANI": "动漫"}.get(mtype)
+            # 只需要部分种子标签
+            labels = [label for label in str(item.NOTE).split("|") if label in ["官方", "中字", "国语", "特效字幕"]]
             # 种子信息
             torrent_item = {
                 "id": item.ID,
@@ -3426,7 +3443,8 @@ class WebAction:
                 "restype": restype,
                 "reseffect": reseffect,
                 "releasegroup": item.OTHERINFO,
-                "video_encode": video_encode
+                "video_encode": video_encode,
+                "labels": labels
             }
             # 促销
             free_item = {
@@ -4707,6 +4725,7 @@ class WebAction:
         enabled = data.get("enabled")
         transfer = data.get("transfer")
         only_nastool = data.get("only_nastool")
+        match_path = data.get("match_path")
         rmt_mode = data.get("rmt_mode")
         config = data.get("config")
         if not isinstance(config, str):
@@ -4720,6 +4739,7 @@ class WebAction:
                                         enabled=enabled,
                                         transfer=transfer,
                                         only_nastool=only_nastool,
+                                        match_path=match_path,
                                         rmt_mode=rmt_mode,
                                         config=config,
                                         download_dir=download_dir)
@@ -4744,17 +4764,20 @@ class WebAction:
             return {"code": 1}
         checked = data.get("checked")
         flag = data.get("flag")
-        enabled, transfer, only_nastool = None, None, None
+        enabled, transfer, only_nastool, match_path = None, None, None, None
         if flag == "enabled":
             enabled = 1 if checked else 0
         elif flag == "transfer":
             transfer = 1 if checked else 0
         elif flag == "only_nastool":
             only_nastool = 1 if checked else 0
+        elif flag == "match_path":
+            match_path = 1 if checked else 0
         self.dbhelper.check_downloader(did=did,
                                        enabled=enabled,
                                        transfer=transfer,
-                                       only_nastool=only_nastool)
+                                       only_nastool=only_nastool,
+                                       match_path=match_path)
         Downloader().init_config()
         return {"code": 0}
 
@@ -4797,3 +4820,27 @@ class WebAction:
             } for ret in result],
             "dataset": dataset
         }
+
+    @staticmethod
+    def user_statistics():
+        """
+        强制刷新站点数据,并发送站点统计的消息
+        """
+        # 强制刷新站点数据,并发送站点统计的消息
+        SiteUserInfo().refresh_site_data_now()
+
+    @staticmethod
+    def get_default_rss_setting(data):
+        """
+        获取默认订阅设置
+        """
+        match data.get("mtype"):
+            case "TV":
+                default_rss_setting = Subscribe().default_rss_setting_tv
+            case "MOV":
+                default_rss_setting = Subscribe().default_rss_setting_mov
+            case _:
+                default_rss_setting = {}
+        if default_rss_setting:
+            return {"code": 0, "data": default_rss_setting}
+        return {"code": 1}
