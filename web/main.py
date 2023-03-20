@@ -7,6 +7,7 @@ import sqlite3
 import time
 import traceback
 import urllib
+import mimetypes
 import xml.dom.minidom
 from functools import wraps
 from math import floor
@@ -66,6 +67,11 @@ LoginManager.init_app(App)
 App.register_blueprint(apiv1_bp, url_prefix="/api/v1")
 
 
+# fix Windows registry stuff
+mimetypes.add_type('application/javascript', '.js')
+mimetypes.add_type('text/css', '.css')
+
+
 @App.after_request
 def add_header(r):
     """
@@ -118,7 +124,7 @@ def login():
         """
         # 判断当前的运营环境
         SystemFlag = SystemUtils.get_system()
-        SyncMod = Config().get_config('pt').get('rmt_mode')
+        SyncMod = Config().get_config('media').get('default_rmt_mode')
         TMDBFlag = 1 if Config().get_config('app').get('rmt_tmdbkey') else 0
         DefaultPath = Config().get_config('media').get('media_default_path')
         if not SyncMod:
@@ -593,15 +599,13 @@ def statistics():
                 SiteRatios.append(round(float(ratio), 1))
 
     # 近期上传下载各站点汇总
-    CurrentUpload, CurrentDownload, _, _, _ = SiteUserInfo().get_pt_site_statistics_history(
-        days=2)
+    # CurrentUpload, CurrentDownload, _, _, _ = SiteUserInfo().get_pt_site_statistics_history(
+    #    days=2)
 
     # 站点用户数据
     SiteUserStatistics = WebAction().get_site_user_statistics({"encoding": "DICT"}).get("data")
 
     return render_template("site/statistics.html",
-                           CurrentDownload=CurrentDownload,
-                           CurrentUpload=CurrentUpload,
                            TotalDownload=TotalDownload,
                            TotalUpload=TotalUpload,
                            TotalSeedingSize=TotalSeedingSize,
@@ -1533,7 +1537,7 @@ def subscribe():
         code, msg, _ = Subscribe().add_rss_subscribe(mtype=media_type,
                                                      name=meta_info.get_name(),
                                                      year=meta_info.year,
-                                                     in_form=RssType.Auto,
+                                                     channel=RssType.Auto,
                                                      mediaid=tmdbId,
                                                      in_from=SearchType.API,
                                                      user_name=user_name)
@@ -1547,7 +1551,7 @@ def subscribe():
             code, msg, _ = Subscribe().add_rss_subscribe(mtype=media_type,
                                                          name=meta_info.get_name(),
                                                          year=meta_info.year,
-                                                         in_form=RssType.Auto,
+                                                         channel=RssType.Auto,
                                                          mediaid=tmdbId,
                                                          season=season,
                                                          in_from=SearchType.API,
